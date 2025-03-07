@@ -23,8 +23,8 @@ jobs:
 
       - name: Copy custom configuration
         run: |
-          cp -r ../config/* openwrt/
-          cp ../feeds.conf openwrt/
+          cp -r $GITHUB_WORKSPACE/config/* openwrt/
+          cp $GITHUB_WORKSPACE/feeds.conf openwrt/
 
       - name: Update feeds
         run: |
@@ -35,8 +35,8 @@ jobs:
       - name: Apply custom configuration
         run: |
           cd openwrt
-          chmod +x ../scripts/apply-config.sh
-          ../scripts/apply-config.sh
+          chmod +x $GITHUB_WORKSPACE/scripts/apply-config.sh
+          $GITHUB_WORKSPACE/scripts/apply-config.sh
 
       - name: Build OpenWrt
         run: |
