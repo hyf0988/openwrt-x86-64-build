@@ -1,31 +1,49 @@
-# Target settings
-TARGET_ARCH="x86"
-TARGET_ARCH_PACKAGES="x86_64"
-TARGET_SUBTARGET="generic"
-TARGET_VARIANT="generic"
+name: Build OpenWrt
 
-# LuCI settings
-CONFIG_LUCI=y
-CONFIG_LUCI_LANG_ZH_CN=y
+on:
+  workflow_dispatch:
 
-# Network settings
-CONFIG_PACKAGE_kmod-iwlwifi=y
-CONFIG_PACKAGE_kmod-iwlwifi- Intel-I226=y
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-# Software package settings
-CONFIG_TARGET_IMAGES_GZIP=y
-CONFIG_TARGET_KERNEL_PARTSIZE=64
-CONFIG_TARGET_ROOTFS_PARTSIZE=2048
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
 
-# Additional packages
-CONFIG_PACKAGE_passwall=y
-CONFIG_PACKAGE_homeproxy=y
-CONFIG_PACKAGE_dockerman=y
+      - name: Set up environment
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential git wget unzip python3 python3-distutils libncurses5-dev libz-dev gawk flex quilt
 
-# Other settings
-CONFIG_BUILD_LOG=y
-CONFIG_BUILD_SOURCE=y
-CONFIG_CLEAN_UP=y
-CONFIG_CHECK_ERRORS=y
-CONFIG_DOWNLOAD_FOLDER="/tmp/openwrt-dl"
-CONFIG_TARGET_OPTIMIZATION="-Os -pipe -march=x86-64 -mtune=generic"
+      - name: Download OpenWrt source code
+        run: |
+          git clone --depth 1 https://github.com/openwrt/openwrt.git
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Configure OpenWrt
+        run: |
+          cd openwrt
+          cp ../diffconfig ./.config
+          make defconfig
+
+      - name: Build OpenWrt
+        run: |
+          cd openwrt
+          make -j$(nproc)
+
+      - name: Upload firmware
+        run: |
+          cd openwrt/bin/targets/x86/64
+          ls -l
+          echo "::set-output name=firmware_file::$(ls openwrt-*-combined-squashfs.img.gz)"
+        id: find_firmware
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: openwrt/bin/targets/x86/64/${{ steps.find_firmware.outputs.firmware_file }}
+          tag_name: ${{ github.run_id }}
+          name: OpenWrt Firmware Build ${{ github.run_id }}
