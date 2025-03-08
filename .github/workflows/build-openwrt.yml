@@ -1,58 +1,70 @@
 name: Build OpenWrt
 
 on:
-  workflow_dispatch:  # 手动触发
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up environment
+      - name: Prepare environment
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev libncursesw5-dev zlib1g-dev gawk git gettext libssl-dev xsltproc rsync wget unzip python3
+          sudo apt update
+          sudo apt install -y build-essential libncurses5-dev gawk unzip wget git python3 python3-setuptools rsync
 
-      - name: Clone OpenWrt source
+      - name: Get OpenWrt source
         run: |
-          git clone https://github.com/openwrt/openwrt.git
-          cd openwrt
-          git checkout v22.03.5
-
-      - name: Copy custom configuration
-        run: |
-          cp -r $GITHUB_WORKSPACE/config/* openwrt/
-          cp $GITHUB_WORKSPACE/feeds.conf openwrt/
-
-      - name: Update feeds
-        run: |
+          git clone --depth 1 https://github.com/openwrt/openwrt.git
           cd openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Apply custom configuration
+      - name: Configure OpenWrt
         run: |
           cd openwrt
-          chmod +x $GITHUB_WORKSPACE/scripts/apply-config.sh
-          $GITHUB_WORKSPACE/scripts/apply-config.sh
+          make defconfig
+          make menuconfig
+          # 在这里插入你的配置命令，例如：
+          # 1. 选择 Target System (x86)
+          # 2. 选择 Subtarget (x86_64)
+          # 3. 选择 Target Profile (Default)
+          # 4. 启用 LuCI
+          # 5. 启用 LuCI 的简体中文语言支持 (LuCI -> Collections -> luci-i18n-base-zh-cn)
+          # 6. 选择 Intel i226 网卡驱动 (Kernel modules -> Network Devices -> kmod-igc)
+          # 7. 设置软件包空间 (Advanced configuration options (for developers) -> Target Image options -> Root filesystem partition size (in MB))  设置为 2048
+          # 8. 添加 passwall, homeproxy, dockerman (Network -> VPN -> passwall), (Network -> Others -> homeproxy), (Base system -> dockerman)
+          # 你需要使用 `sed` 命令或者类似的工具来修改 `.config` 文件
+          # 例如:
+          sed -i 's/# CONFIG_TARGET_x86_64 is not set/CONFIG_TARGET_x86_64=y/' .config
+          sed -i 's/# CONFIG_PACKAGE_luci is not set/CONFIG_PACKAGE_luci=y/' .config
+          sed -i 's/# CONFIG_PACKAGE_luci-i18n-base-zh-cn is not set/CONFIG_PACKAGE_luci-i18n-base-zh-cn=y/' .config
+          sed -i 's/# CONFIG_PACKAGE_kmod-igc is not set/CONFIG_PACKAGE_kmod-igc=y/' .config
+          sed -i 's/CONFIG_TARGET_ROOTFS_PARTSIZE=4096/CONFIG_TARGET_ROOTFS_PARTSIZE=2048/' .config
+          sed -i '/CONFIG_PACKAGE_luci-app-passwall=n/a CONFIG_PACKAGE_luci-app-passwall=y' .config
+          sed -i '/CONFIG_PACKAGE_homeproxy=n/a CONFIG_PACKAGE_homeproxy=y' .config
+          sed -i '/CONFIG_PACKAGE_dockerman=n/a CONFIG_PACKAGE_dockerman=y' .config
+
+      - name: Download packages
+        run: |
+          cd openwrt
+          make download
 
       - name: Build OpenWrt
         run: |
           cd openwrt
-          make -j$(nproc) V=s
+          make -j$(nproc)
 
-      - name: Upload build logs
-        if: ${{ failure() }}
+      - name: Upload firmware
+        run: |
+          cd openwrt
+          mkdir -p bin/targets
+          find bin/targets -type f -name "*.img.gz" -print0 | xargs -0 tar -czvf firmware.tar.gz
+      - name: Upload firmware
         uses: actions/upload-artifact@v3
         with:
-          name: build-logs
-          path: openwrt/logs
-
-      - name: Notify on failure
-        if: ${{ failure() }}
-        uses: rtCamp/action-slack-notify@v2
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_MESSAGE: "OpenWrt build failed! Check the logs for details."
+          name: OpenWrt-firmware
+          path: openwrt/firmware.tar.gz
