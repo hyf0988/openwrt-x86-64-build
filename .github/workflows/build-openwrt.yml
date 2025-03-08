@@ -42,3 +42,17 @@ jobs:
         run: |
           cd openwrt
           make -j$(nproc) V=s
+
+      - name: Upload build logs
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-logs
+          path: openwrt/logs
+
+      - name: Notify on failure
+        if: ${{ failure() }}
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_MESSAGE: "OpenWrt build failed! Check the logs for details."
