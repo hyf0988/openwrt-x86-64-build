@@ -1,70 +1,31 @@
-name: Build OpenWrt
+# Target settings
+TARGET_ARCH="x86"
+TARGET_ARCH_PACKAGES="x86_64"
+TARGET_SUBTARGET="generic"
+TARGET_VARIANT="generic"
 
-on:
-  workflow_dispatch:
+# LuCI settings
+CONFIG_LUCI=y
+CONFIG_LUCI_LANG_ZH_CN=y
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+# Network settings
+CONFIG_PACKAGE_kmod-iwlwifi=y
+CONFIG_PACKAGE_kmod-iwlwifi- Intel-I226=y
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+# Software package settings
+CONFIG_TARGET_IMAGES_GZIP=y
+CONFIG_TARGET_KERNEL_PARTSIZE=64
+CONFIG_TARGET_ROOTFS_PARTSIZE=2048
 
-      - name: Prepare environment
-        run: |
-          sudo apt update
-          sudo apt install -y build-essential libncurses5-dev gawk unzip wget git python3 python3-setuptools rsync
+# Additional packages
+CONFIG_PACKAGE_passwall=y
+CONFIG_PACKAGE_homeproxy=y
+CONFIG_PACKAGE_dockerman=y
 
-      - name: Get OpenWrt source
-        run: |
-          git clone --depth 1 https://github.com/openwrt/openwrt.git
-          cd openwrt
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-
-      - name: Configure OpenWrt
-        run: |
-          cd openwrt
-          make defconfig
-          make menuconfig
-          # 在这里插入你的配置命令，例如：
-          # 1. 选择 Target System (x86)
-          # 2. 选择 Subtarget (x86_64)
-          # 3. 选择 Target Profile (Default)
-          # 4. 启用 LuCI
-          # 5. 启用 LuCI 的简体中文语言支持 (LuCI -> Collections -> luci-i18n-base-zh-cn)
-          # 6. 选择 Intel i226 网卡驱动 (Kernel modules -> Network Devices -> kmod-igc)
-          # 7. 设置软件包空间 (Advanced configuration options (for developers) -> Target Image options -> Root filesystem partition size (in MB))  设置为 2048
-          # 8. 添加 passwall, homeproxy, dockerman (Network -> VPN -> passwall), (Network -> Others -> homeproxy), (Base system -> dockerman)
-          # 你需要使用 `sed` 命令或者类似的工具来修改 `.config` 文件
-          # 例如:
-          sed -i 's/# CONFIG_TARGET_x86_64 is not set/CONFIG_TARGET_x86_64=y/' .config
-          sed -i 's/# CONFIG_PACKAGE_luci is not set/CONFIG_PACKAGE_luci=y/' .config
-          sed -i 's/# CONFIG_PACKAGE_luci-i18n-base-zh-cn is not set/CONFIG_PACKAGE_luci-i18n-base-zh-cn=y/' .config
-          sed -i 's/# CONFIG_PACKAGE_kmod-igc is not set/CONFIG_PACKAGE_kmod-igc=y/' .config
-          sed -i 's/CONFIG_TARGET_ROOTFS_PARTSIZE=4096/CONFIG_TARGET_ROOTFS_PARTSIZE=2048/' .config
-          sed -i '/CONFIG_PACKAGE_luci-app-passwall=n/a CONFIG_PACKAGE_luci-app-passwall=y' .config
-          sed -i '/CONFIG_PACKAGE_homeproxy=n/a CONFIG_PACKAGE_homeproxy=y' .config
-          sed -i '/CONFIG_PACKAGE_dockerman=n/a CONFIG_PACKAGE_dockerman=y' .config
-
-      - name: Download packages
-        run: |
-          cd openwrt
-          make download
-
-      - name: Build OpenWrt
-        run: |
-          cd openwrt
-          make -j$(nproc)
-
-      - name: Upload firmware
-        run: |
-          cd openwrt
-          mkdir -p bin/targets
-          find bin/targets -type f -name "*.img.gz" -print0 | xargs -0 tar -czvf firmware.tar.gz
-      - name: Upload firmware
-        uses: actions/upload-artifact@v3
-        with:
-          name: OpenWrt-firmware
-          path: openwrt/firmware.tar.gz
+# Other settings
+CONFIG_BUILD_LOG=y
+CONFIG_BUILD_SOURCE=y
+CONFIG_CLEAN_UP=y
+CONFIG_CHECK_ERRORS=y
+CONFIG_DOWNLOAD_FOLDER="/tmp/openwrt-dl"
+CONFIG_TARGET_OPTIMIZATION="-Os -pipe -march=x86-64 -mtune=generic"
